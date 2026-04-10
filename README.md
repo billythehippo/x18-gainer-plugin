@@ -10,7 +10,7 @@ LIMITATIONS (temporary):
 1. This plugin now controls only analog gains (USB trims coming soon).
 2. This plugin now controls only one mixer per network.
 
-The plugin has been tested as VST3 on Debian GNU/Linux 13 with Ardour and Reaper.
+The plugin has been tested as VST3 and LV2 on Debian GNU/Linux 13 with Ardour and Reaper and on MacOS on Reaper
 
 TODO:
 1. Add 48V switches
