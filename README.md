@@ -13,9 +13,7 @@ LIMITATIONS (temporary):
 The plugin has been tested as VST3 on Debian GNU/Linux 13 with Ardour and Reaper.
 
 TODO:
-1. Test it on other platforms and other linux distribs;
-2. Add support switching GAIN/TRIM;
-3. Add support for multiple mixers in the network;
-4. Rework to global system LIBLO
-
-NB!!! The LIBLO is used as static library, now only linux version presents.
+1. Add 48V switches
+2. Test it on other platforms and other linux distribs;
+3. Add support switching GAIN/TRIM;
+4. Add support for multiple mixers in the network;
