@@ -1,4 +1,4 @@
-This is a simple JUCE- and liblo-based plugin to control Behringer X/XR18 gains from your DAW and also keep them in the project file.
+This is a simple JUCE8- and tinyOSC-based plugin to control Behringer X/XR18 gains from your DAW and also keep them in the project file.
 The mixer MUST be connected to the same local network with your PC. In this case the plugin will find mixer automatically.
 
 When FEEDBACK is switched on - you can also control the mixer from other PCs and apps with DAW parameter sync;
