@@ -14,13 +14,13 @@ public:
     void resized() override;
 
 private:
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (X18gainerAudioProcessorEditor)
+
     X18gainerAudioProcessor& audioProcessor;
     
     juce::OwnedArray<juce::Label>  labels;
     juce::OwnedArray<juce::Slider> knobs;
-    juce::OwnedArray<juce::AudioProcessorValueTreeState::SliderAttachment> attachments;
     juce::ToggleButton feedbackButton;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> feedbackAttachment;
-
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (X18gainerAudioProcessorEditor)
+    juce::OwnedArray<juce::AudioProcessorValueTreeState::SliderAttachment> attachments;
 };

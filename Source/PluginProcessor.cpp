@@ -8,6 +8,8 @@
 
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "x18.h"
+#include <cmath>
 
 bool threadRun;
 
@@ -23,21 +25,47 @@ X18gainerAudioProcessor::X18gainerAudioProcessor()
                      #endif
                        ),
 #endif
-    parameters ( *this, nullptr, juce::Identifier ("pluginParams"), juce::AudioProcessorValueTreeState::ParameterLayout())
+    parameters ( *this, nullptr, "pluginParams", createParameterLayout())
 {
-    float min, def, max;
     juce::String id;
-    juce::String name;
-    
+
     memset(&x18_context, 0, sizeof(x18_context));
     x18_context.port = 10024;
     juce::String portStr(x18_context.port);
     
-    osc_server_thread = lo_server_thread_new(portStr.getCharPointer().getAddress(), NULL);
-    lo_server_thread_add_method(osc_server_thread, NULL, NULL, X18gainerAudioProcessor::replyHandler, (void*)&x18_context);
-    if (lo_server_thread_start(osc_server_thread)==-1) exit(1);
-    osc_server = lo_server_thread_get_server(osc_server_thread);
+    for (int i = 1; i <= 17; ++i)
+    {
+        id   = "GAIN_" + juce::String (i);
+        parameters.addParameterListener (id, this);
+    }
     
+    socket = std::make_unique<juce::DatagramSocket>(true);
+    if (socket->bindToPort(0)) startThread((void*)&x18_context);
+    else exit(1);//socket = nullptr;
+}
+
+X18gainerAudioProcessor::~X18gainerAudioProcessor()
+{
+    for (int i = 1; i <= 17; ++i)
+    {
+        juce::String id   = "GAIN_" + juce::String (i);
+        parameters.removeParameterListener (id, this);
+        setChannelGain(i, x18_context.old_gain[i - 1]);
+    }
+    parameters.removeParameterListener("FEEDBACK", this);
+    stopThread();
+    socket = nullptr;
+}
+
+juce::AudioProcessorValueTreeState::ParameterLayout X18gainerAudioProcessor::createParameterLayout()
+{
+    juce::AudioProcessorValueTreeState::ParameterLayout layout;
+    float min;
+    float def;
+    float max;
+    juce::String id;
+    juce::String name;
+
     for (int i = 1; i <= 17; ++i)
     {
         id   = "GAIN_" + juce::String (i);
@@ -53,38 +81,12 @@ X18gainerAudioProcessor::X18gainerAudioProcessor()
             def = 20.0;
             max = 60.0;
         }
-        parameters.createAndAddParameter (std::make_unique<juce::AudioParameterFloat> (id, name, min, max, def));      // значение по умолчанию
-        parameters.addParameterListener (id, this);
+        layout.add(std::make_unique<juce::AudioParameterFloat> (id, name, min, max, def));      // значение по умолчанию
     }
-    
-    parameters.createAndAddParameter (std::make_unique<juce::AudioParameterBool> ("FEEDBACK", "Feedback", false));
-    parameters.addParameterListener ("FEEDBACK", this);
-    
-    parameters.state = juce::ValueTree (juce::Identifier ("pluginParams"));
-    
-    startThread((void*)&x18_context);
 
-    // while(!findMixer(x18_context.port)) usleep(1000);
-    //
-    // for (int i = 1; i <= 17; ++i)
-    // {
-    //     id   = "GAIN_" + juce::String (i);
-    //     x18_gains[i - 1] = getChannelGain(i);//*parameters.getRawParameterValue(id);
-    //     fprintf(stderr, "%s = %f\r\n", id.toRawUTF8(), x18_gains[i - 1] * (i==17 ? 32 : 72) - 12);
-    // }
-}
+    layout.add(std::make_unique<juce::AudioParameterBool> ("FEEDBACK", "Feedback", false));
 
-X18gainerAudioProcessor::~X18gainerAudioProcessor()
-{
-    stopThread();
-    for (int i = 1; i <= 17; ++i)
-    {
-        juce::String id   = "GAIN_" + juce::String (i);
-        parameters.removeParameterListener (id, this);
-        setChannelGain(i, x18_context.old_gain[i - 1]);
-    }
-    lo_server_thread_stop(osc_server_thread);
-    if (!lo_address_get_port(osc_address)) lo_address_free(osc_address);
+    return layout;
 }
 
 void X18gainerAudioProcessor::parameterChanged(const juce::String& paramID, float newValue)
@@ -99,7 +101,7 @@ void X18gainerAudioProcessor::parameterChanged(const juce::String& paramID, floa
             id = "GAIN_" + juce::String (i);
             if (paramID == id)
             {
-                fprintf(stderr, "%s \t %f\r\n", id.toRawUTF8(), newValue);
+                fprintf(stderr, "Changed: %s \t %f\r\n", id.toRawUTF8(), newValue);
                 gain = (newValue + 12) / (i == 17 ? 32 : 72);
                 // if (i == 17) gain = (newValue + 12) / 32;
                 // else gain = (newValue + 12) / 72;
@@ -128,7 +130,6 @@ void X18gainerAudioProcessor::parameterChanged(const juce::String& paramID, floa
 void X18gainerAudioProcessor::startThread(void* arg)
 {
     threadRun = true;
-    //thread = std::thread(X18gainerAudioProcessor::threadHandler, arg);
     thread = std::thread([this, arg](){threadHandler(arg);});
 }
 
@@ -136,147 +137,154 @@ void X18gainerAudioProcessor::stopThread()
 {
     threadRun = false;
     thread.join();
-    fprintf(stderr, "Thread stopped!\r\n");
+    isConnected = false;
 }
 
 void X18gainerAudioProcessor::threadHandler(void* arg)
 {
     juce::String id;
     x18_context_t* x18_context = (x18_context_t*)arg;
+    float tmpGainM;
+    float tmpGainP;
 
-    while(!findMixer(x18_context->port)) usleep(1000);
+    while((!findMixer(x18_context->port))&&(threadRun == true)) usleep(1000);
+    x18_context->flags|= CONNECTED;
+    isConnected = true;
 
-    for (int i = 1; i <= 17; ++i)
+    if (threadRun&&isConnected)
     {
-        id   = "GAIN_" + juce::String (i);
-        x18_context->old_gain[i - 1] = getChannelGain(i);//*parameters.getRawParameterValue(id);
-        fprintf(stderr, "%s = %f\r\n", id.toRawUTF8(), x18_context->old_gain[i - 1] * (i==17 ? 32 : 72) - 12);
-    }
-
-    while(threadRun)
-    {
-        //fprintf(stderr, "Running\r\n");
-        usleep(100000);
         for (int i = 1; i <= 17; ++i)
         {
             id   = "GAIN_" + juce::String (i);
-            float tmpGainM = getChannelGain(i);
-            float tmpGainP = (parameters.getRawParameterValue(id)->load() + 12)/(i==17 ? 32 : 72);
-            fprintf(stderr, "%s %f %f\r\n", id.toRawUTF8(), tmpGainM, tmpGainP);
-            if (tmpGainM!= tmpGainP)
+            getChannelGain(i, &x18_context->old_gain[i - 1]);//*parameters.getRawParameterValue(id);
+            fprintf(stderr, "Saved %s = %f\r\n", id.toRawUTF8(), x18_context->old_gain[i - 1] * (i==17 ? 32 : 72) - 12);
+        }
+    }
+    fprintf(stderr, "GAINS SAVED...\r\n");
+    while(threadRun)
+    {
+        //fprintf(stderr, "Running\r\n");
+        juce::Thread::sleep(50);
+        if (threadRun) for (int i = 1; i <= 17; ++i)
+        {
+            id   = "GAIN_" + juce::String (i);
+            getChannelGain(i, &tmpGainM);
+            tmpGainP = (parameters.getRawParameterValue(id)->load() + 12)/(i==17 ? 32 : 72);
+            //fprintf(stderr, "Got: %s %f %f\r\n", id.toRawUTF8(), tmpGainM, tmpGainP);
+            if ((tmpGainM!= tmpGainP)&&(threadRun == true))
+            {
                 if (*parameters.getRawParameterValue("FEEDBACK")==true) parameters.getParameter(id)->setValueNotifyingHost(tmpGainM);
                 else
                 {
                     parameters.getParameter(id)->setValueNotifyingHost(tmpGainP);
                     setChannelGain(i, tmpGainP);
                 }
+            }
         }
     }
+    fprintf(stderr, "Thread stopped!\r\n");
 }
 
 int X18gainerAudioProcessor::findMixer(uint16_t port)
 {
-    struct in_addr ipstd;
-    lo_message msg = lo_message_new();
-    
+    int ret = 0;
     auto allAddrs = juce::IPAddress::getAllAddresses();
-    for (const auto& ip : allAddrs) 
+    juce::IPAddress bcast;
+    char sendbuf[16];
+    char recvbuf[1024];
+    int buflen;
+    tosc_message msg;
+
+    for (const auto& ip : allAddrs)
     {
-        if (strncmp(ip.toString().toRawUTF8(), "127.0.0.", 8)) 
+        if (ip.address[0] == 127 || ip.toString().contains(":")) continue;
+        bcast = ip;
+        bcast.address[3] = 255;
+
+        fprintf(stderr, "Scanning on: %s (Broadcast: %s:%d)\n", ip.toString().toRawUTF8(), bcast.toString().toRawUTF8(), x18_context.port);
+        memset(sendbuf, 0, 16);
+        buflen = tosc_writeMessage(sendbuf, sizeof(sendbuf), "/xinfo", "");
+        int sent = socket->write (bcast.toString(), x18_context.port, sendbuf, buflen);
+        if (socket->waitUntilReady(true, 10) == 1)
         {
-            inet_pton(AF_INET, ip.toString().toRawUTF8(), &ipstd);
-            ipstd.s_addr|= 0xFF000000;
-            osc_address = lo_address_new_with_proto(LO_UDP, inet_ntoa(ipstd), juce::String(port).toRawUTF8());
-            lo_send_message_from(osc_address, osc_server, "/xinfo", msg);
-            usleep(5000);
-            if (x18_context.ip)
+            buflen = socket->read(recvbuf, sizeof(recvbuf), false);
+            if (buflen > 0)
             {
-                lo_address_free(osc_address);
-                ipstd.s_addr = x18_context.ip;
-                fprintf(stderr, "Mixer found on %s\r\n", inet_ntoa(ipstd));
-                osc_address = lo_address_new_with_proto(LO_UDP, inet_ntoa(ipstd), juce::String(port).toRawUTF8());
-                return 1;
-                break;
+                if (tosc_parseMessage(&msg, recvbuf, buflen) == 0) // 0 - успех
+                {
+                    if (std::string(tosc_getAddress(&msg)) == "/xinfo")
+                    {
+                        const char* x18ip   = tosc_getNextString(&msg);
+
+                        if (x18ip != nullptr)
+                        {
+
+                            const char* name    = tosc_getNextString(&msg);
+                            const char* model   = tosc_getNextString(&msg);
+                            const char* version = tosc_getNextString(&msg);
+                            fprintf(stderr, "Found %s (%s) at %s, v%s\n", name, model, x18ip, version);
+                            juce::IPAddress x18_address(x18ip);
+                            x18_context.ip    = (uint32_t)x18_address.address[0] << 24 |
+                                                (uint32_t)x18_address.address[1] << 16 |
+                                                (uint32_t)x18_address.address[2] << 8  |
+                                                (uint32_t)x18_address.address[3];
+                            isConnected = true;
+                            ret = 1;
+                            break;
+                        }
+                    }
+                }
             }
-            lo_address_free(osc_address);
         }
     }
-    return 0;
+    return ret;
 }
 
-float X18gainerAudioProcessor::getChannelGain(uint8_t channel)
+void X18gainerAudioProcessor::getChannelGain(uint8_t channel, float* gain)
 {
-    lo_message msg = lo_message_new();
-    juce::String path("/headamp/");
-    juce::String zero("0");
-    juce::String channelNumber(channel);
-    juce::String gainAddr("/gain");
-    if (channel<10) path += zero;
-    path += channelNumber;
-    path += gainAddr;
-    x18_context.flags&=~ANSWERED;
-    lo_send_message_from(osc_address, osc_server, path.toStdString().c_str(), msg);
-    while ((x18_context.flags&ANSWERED)!=ANSWERED) usleep(100);
-    lo_message_free(msg);
-    return x18_context.osc_gain[channel];
+    char addrbuf[128];
+    char buffer[128];
+    char answerbuf[128];
+    int len;
+    tosc_message msg;
+
+    if (isConnected)
+    {
+        memset(addrbuf, 0, 128);
+        memset(buffer, 0, 128);
+        memset(answerbuf, 0, 128);
+
+        sprintf(addrbuf, "/headamp/%02d/gain", channel);
+        len = tosc_writeMessage(buffer, sizeof(buffer), addrbuf, "");
+        if (socket != nullptr && len > 0) socket->write(juce::IPAddress(x18_context.ip).toString(), x18_context.port, buffer, len);
+        if (socket->waitUntilReady(true, 20) == 1)
+        {
+            len = socket->read(answerbuf, sizeof(answerbuf), false);
+            if ((len > 0)&&(tosc_parseMessage(&msg, answerbuf, len) == 0))
+            {
+                juce::String address = tosc_getAddress(&msg);
+                if (address.startsWith("/headamp/")&&(address.endsWith("/gain"))) *gain = tosc_getNextFloat(&msg);
+            }
+        }
+        else isConnected = false;
+    }
 }
 
 void X18gainerAudioProcessor::setChannelGain(uint8_t channel, float val)
 {
-    lo_message msg = lo_message_new();
-    juce::String path = "/headamp/";
-    juce::String zero("0");
-    juce::String channelNumber(channel);
-    juce::String gainAddr("/gain");
-    if (channel<10) path += zero;
-    path += channelNumber;
-    path += gainAddr;
-    lo_message_add_float(msg, val);
-    lo_send_message_from(osc_address, osc_server, path.toStdString().c_str(), msg);
-    lo_message_free(msg);
-}
+    char addrbuf[128];
+    char buffer[128];
+    int len;
+    tosc_message msg;
 
-int X18gainerAudioProcessor::replyHandler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data)
-{
-    struct in_addr addr;
-    
-    x18_context_t* mixer_context = (x18_context_t*)user_data;
-    //(void)msg;
-    //(void)user_data;
-
-    if (argc > 0)
+    if (isConnected)
     {
-        if (strncmp(path, "/xinfo", 6) == 0)
-        {
-            inet_pton(AF_INET, &argv[0]->s, &addr);
-            //fprintf(stderr, "%s\r\n", inet_ntoa(addr));
-            mixer_context->ip = addr.s_addr;
-        }
-        else if (strncmp(path, "/headamp", 8)==0)
-        {
-            if (strstr(path, "/gain")!= nullptr)
-            {
-                uint8_t channel = atoi(path + 9);
-                float val = argv[0]->f;
-                mixer_context->osc_gain[channel] = argv[0]->f;
-                if ((mixer_context->flags&&FBENABLED)==FBENABLED) fprintf(stderr, "GAIN GETTED");
-                mixer_context->flags|= ANSWERED;
-            }
-        }
+        memset(addrbuf, 0, 128);
+        memset(buffer, 0, 128);
+        sprintf(addrbuf, "/headamp/%02d/gain", channel);
+        len = tosc_writeMessage(buffer, sizeof(buffer), addrbuf, "f", val);
+        if (socket != nullptr && len > 0) socket->write(juce::IPAddress(x18_context.ip).toString(), x18_context.port, buffer, len);
     }
-
-
-    //for (int i = 0; i < argc; ++i)
-    //{
-    //    switch (types[i])
-    //    {
-    //    case 'i': fprintf(stderr, "  %d: %d (int)\n", i, argv[i]->i); break;
-    //    case 'f': fprintf(stderr, "  %d: %f (float)\n", i, argv[i]->f); break;
-    //    case 's': fprintf(stderr, "  %d: %s (string)\n", i, &argv[i]->s); break;
-    //    default:  fprintf(stderr, "  %d: <неизвестный тип '%c'>\n", i, types[i]); break;
-    //    }
-    //}
-    return 0;
 }
 
 //==============================================================================
@@ -430,6 +438,7 @@ void X18gainerAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     juce::String id;
     float gain;
     float newValue;
+    bool changed = false;
 
     for (int i = 1; i <= 17; ++i)
     {
@@ -439,8 +448,14 @@ void X18gainerAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
         gain = (newValue + 12) / (i == 17 ? 32 : 72);
         if (gain < 0.0) gain = 0.0;
         if (gain > 1.0) gain = 1.0;
-        setChannelGain(i, gain);
+        if (roundf(gain)!=roundf(x18_context.osc_gain[i - 1]))
+        {
+            x18_context.osc_gain[i - 1] = gain;
+            setChannelGain(i, x18_context.osc_gain[i - 1]);
+            changed = true;
+        }
     }
+    changeRequired = changed;
 }
 
 void X18gainerAudioProcessor::setStateInformation (const void* data, int sizeInBytes)

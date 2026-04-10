@@ -51,6 +51,9 @@ X18gainerAudioProcessorEditor::X18gainerAudioProcessorEditor (X18gainerAudioProc
 
 X18gainerAudioProcessorEditor::~X18gainerAudioProcessorEditor()
 {
+    attachments.clear();
+    feedbackAttachment = nullptr;
+    fprintf(stderr, "Attachments cleared\r\n");
 }
 
 //==============================================================================

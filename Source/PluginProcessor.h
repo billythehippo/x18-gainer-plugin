@@ -1,12 +1,8 @@
 #pragma once
 
 #include <JuceHeader.h>
-
-#include "lo/lo.h"
+#include "tinyosc.h"
 #include "x18.h"
-#ifndef _WIN32
-#include <arpa/inet.h>
-#endif
 #include <iostream>
 #include <thread>
 
@@ -53,17 +49,17 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-    float getChannelGain(uint8_t channel);
+    void getChannelGain(uint8_t channel, float* gain);
     void setChannelGain(uint8_t channel, float val);
 
     x18_context_t x18_context;
-    //float x18_gains[17];
-    //float prj_gains[17];
 
 private:
     //==============================================================================
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     void parameterChanged (const juce::String& paramID, float newValue) override;
-    static int replyHandler(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data);
+
+    std::unique_ptr<juce::DatagramSocket> socket;
     int findMixer(uint16_t port);
 
     std::thread thread;
@@ -71,8 +67,8 @@ private:
     void stopThread();
     void threadHandler(void* arg);
 
-    lo_server_thread osc_server_thread;
-    lo_server osc_server;
-    lo_address osc_address;
+    bool changeRequired = false;
+    bool isConnected = false;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (X18gainerAudioProcessor)
 };

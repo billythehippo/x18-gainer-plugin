@@ -9,7 +9,8 @@ typedef struct
     float osc_gain[17];
     float old_gain[17];
 } x18_context_t;
-#define ANSWERED  0x0001
-#define FBENABLED 0x0002
+#define CONNECTED 0x0001
+#define ANSWERED  0x0002
+#define FBENABLED 0x0004
 
 #endif
