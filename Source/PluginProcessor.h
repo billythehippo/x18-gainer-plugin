@@ -49,9 +49,6 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-    void getChannelGain(uint8_t channel, float* gain);
-    void setChannelGain(uint8_t channel, float val);
-
     x18_context_t x18_context;
 
 private:
@@ -61,6 +58,12 @@ private:
 
     std::unique_ptr<juce::DatagramSocket> socket;
     int findMixer(uint16_t port);
+    void getChannelGain(uint8_t channel, float* gain);
+    void setChannelGain(uint8_t channel, float val);
+    void getChannelPhantom(uint8_t channel, bool* phantom);
+    void setChannelPhantom(uint8_t channel, bool val);
+    void getChannelLink(uint8_t channel, bool* link);
+    void setChannelLink(uint8_t channel, bool val);
 
     std::thread thread;
     void startThread(void* arg);
@@ -69,6 +72,7 @@ private:
 
     bool changeRequired = false;
     bool isConnected = false;
+    bool oldGot = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (X18gainerAudioProcessor)
 };

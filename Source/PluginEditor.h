@@ -20,7 +20,11 @@ private:
     
     juce::OwnedArray<juce::Label>  labels;
     juce::OwnedArray<juce::Slider> knobs;
+    juce::OwnedArray<juce::ToggleButton> phantomSwitchers;
+    juce::OwnedArray<juce::TextButton>linkButtons;
     juce::ToggleButton feedbackButton;
+    juce::OwnedArray<juce::AudioProcessorValueTreeState::SliderAttachment> gainAttachments;
+    juce::OwnedArray<juce::AudioProcessorValueTreeState::ButtonAttachment> phantomAttachments;
+    juce::OwnedArray<juce::AudioProcessorValueTreeState::ButtonAttachment> linkAttachments;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> feedbackAttachment;
-    juce::OwnedArray<juce::AudioProcessorValueTreeState::SliderAttachment> attachments;
 };

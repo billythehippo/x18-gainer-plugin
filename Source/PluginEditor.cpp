@@ -13,7 +13,7 @@
 X18gainerAudioProcessorEditor::X18gainerAudioProcessorEditor (X18gainerAudioProcessor& p)
     : AudioProcessorEditor (&p), audioProcessor (p)
 {
-    setSize (600, 240);
+    setSize (600, 330);
     
     for (int i = 1; i <= 17; ++i)
     {
@@ -23,12 +23,12 @@ X18gainerAudioProcessorEditor::X18gainerAudioProcessorEditor (X18gainerAudioProc
         knob->setTooltip ("Gain " + juce::String(i));
         if (i < 17) knob->setRange(-12, 60, 0.5);
         else knob->setRange(-12, 20, 0.5);
-        if (i < 9) knob->setBounds(50*i, 30, 50, 80);
-        else if (i < 17) knob->setBounds(50*(i - 8), 140, 50, 80);
-        else knob->setBounds(500, 30, 50, 80);
+        if (i < 9) knob->setBounds(50*i, 50, 50, 80);
+        else if (i < 17) knob->setBounds(50*(i - 8), 210, 50, 80);
+        else knob->setBounds(500, 50, 50, 80);
         addAndMakeVisible(knob);
         knobs.add(knob);
-        attachments.add(new juce::AudioProcessorValueTreeState::SliderAttachment (audioProcessor.parameters, "GAIN_" + juce::String (i), *knob));
+        gainAttachments.add(new juce::AudioProcessorValueTreeState::SliderAttachment (audioProcessor.parameters, "GAIN_" + juce::String (i), *knob));
 
         auto* label = new juce::Label("label "+juce::String(i), "CH"+juce::String(i));
         if (i==17) label->setText("AUX", juce::dontSendNotification);
@@ -36,22 +36,58 @@ X18gainerAudioProcessorEditor::X18gainerAudioProcessorEditor (X18gainerAudioProc
         label->setJustificationType(juce::Justification::centred);
         label->setColour(juce::Label::textColourId, juce::Colours::white);
         label->setColour(juce::Label::backgroundColourId, juce::Colours::darkslategrey);
-        if (i < 9) label->setBounds(50*i + 1, 10, 48, 20);
-        else if (i < 17) label->setBounds(50*(i - 8) + 1, 120, 48, 20);
-        else label->setBounds(500 + 1, 10, 48, 20);
+        if (i < 9) label->setBounds(50*i + 1, 30, 48, 20);
+        else if (i < 17) label->setBounds(50*(i - 8) + 1, 190, 48, 20);
+        else label->setBounds(500 + 1, 30, 48, 20);
         addAndMakeVisible(label);
         labels.add(label);
+
+        if (i < 17)
+        {
+            auto* phantomSwitcher = new juce::ToggleButton ();
+            phantomSwitcher->setButtonText("48V");
+            if (i < 9) phantomSwitcher->setBounds(50*i, 120, 50, 50);
+            else phantomSwitcher->setBounds(50*(i - 8), 280, 50, 50);
+            addAndMakeVisible(phantomSwitcher);
+            phantomSwitchers.add(phantomSwitcher);
+            phantomAttachments.add(new juce::AudioProcessorValueTreeState::ButtonAttachment (audioProcessor.parameters, "PHANTOM_" + juce::String (i), *phantomSwitcher));
+
+            if ((i&1)!=0)
+            {
+                auto* linkButton = new juce::TextButton();
+                linkButton->setButtonText("Link");
+                if (i < 9) linkButton->setBounds(50*i, 10, 100, 20);
+                else linkButton->setBounds(50*(i - 8), 170, 100, 20);
+                addAndMakeVisible(linkButton);
+                linkButton->setClickingTogglesState(true);
+                linkButton->onClick = [this, linkButton]
+                {
+                    auto state = linkButton->getToggleState();
+                    if (state)
+                    {
+                        linkButton->setButtonText("Unink");
+                    }
+                    else
+                    {
+                        linkButton->setButtonText("Link");
+                    }
+                };
+                linkButtons.add(linkButton);
+                linkAttachments.add(new juce::AudioProcessorValueTreeState::ButtonAttachment (audioProcessor.parameters, "LINK_" + juce::String ((i>>1)+1), *linkButton));
+            }
+        }
     }
 
     feedbackButton.setButtonText ("FB");
-    feedbackButton.setBounds(500, 105, 50, 50);
+    feedbackButton.setBounds(500, 120, 50, 50);
     addAndMakeVisible(feedbackButton);
     feedbackAttachment.reset(new juce::AudioProcessorValueTreeState::ButtonAttachment (audioProcessor.parameters, "FEEDBACK", feedbackButton));
 }
 
 X18gainerAudioProcessorEditor::~X18gainerAudioProcessorEditor()
 {
-    attachments.clear();
+    gainAttachments.clear();
+    phantomAttachments.clear();
     feedbackAttachment = nullptr;
     fprintf(stderr, "Attachments cleared\r\n");
 }
@@ -63,7 +99,7 @@ void X18gainerAudioProcessorEditor::paint (juce::Graphics& g)
     g.fillAll (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId));
 
     g.setColour (juce::Colours::white);
-    g.setFont (juce::FontOptions (15.0f));
+    g.setFont (15.0f);
     //g.drawFittedText ("Hello World!", getLocalBounds(), juce::Justification::centred, 1);
 }
 
