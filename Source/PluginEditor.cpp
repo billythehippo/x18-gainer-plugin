@@ -14,18 +14,21 @@ X18gainerAudioProcessorEditor::X18gainerAudioProcessorEditor (X18gainerAudioProc
     : AudioProcessorEditor (&p), audioProcessor (p)
 {
     setSize (600, 330);
+    int offsetLeft;
+    int offsetRight;
     
     for (int i = 1; i <= 17; ++i)
     {
         auto* knob = new juce::Slider (juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::TextBoxBelow);
+        knob->setLookAndFeel(&customDial);
         knob->setName ("GAIN_" + juce::String(i));
         knob->setTextBoxStyle (juce::Slider::TextBoxBelow, false, 50, 20);
         knob->setTooltip ("Gain " + juce::String(i));
         if (i < 17) knob->setRange(-12, 60, 0.5);
         else knob->setRange(-12, 20, 0.5);
-        if (i < 9) knob->setBounds(50*i, 50, 50, 80);
-        else if (i < 17) knob->setBounds(50*(i - 8), 210, 50, 80);
-        else knob->setBounds(500, 50, 50, 80);
+        if (i < 9) knob->setBounds(50*i, 30, 50, 80);
+        else if (i < 17) knob->setBounds(50*(i - 8), 170, 50, 80);
+        else knob->setBounds(500, 30, 50, 80);
         addAndMakeVisible(knob);
         knobs.add(knob);
         gainAttachments.add(new juce::AudioProcessorValueTreeState::SliderAttachment (audioProcessor.parameters, "GAIN_" + juce::String (i), *knob));
@@ -36,18 +39,23 @@ X18gainerAudioProcessorEditor::X18gainerAudioProcessorEditor (X18gainerAudioProc
         label->setJustificationType(juce::Justification::centred);
         label->setColour(juce::Label::textColourId, juce::Colours::white);
         label->setColour(juce::Label::backgroundColourId, juce::Colours::darkslategrey);
-        if (i < 9) label->setBounds(50*i + 1, 30, 48, 20);
-        else if (i < 17) label->setBounds(50*(i - 8) + 1, 190, 48, 20);
-        else label->setBounds(500 + 1, 30, 48, 20);
+        if (i < 9) label->setBounds(50*i + 1, 10, 48, 20);
+        else if (i < 17) label->setBounds(50*(i - 8) + 1, 150, 48, 20);
+        else label->setBounds(500 + 1, 10, 48, 20);
         addAndMakeVisible(label);
         labels.add(label);
 
         if (i < 17)
         {
-            auto* phantomSwitcher = new juce::ToggleButton ();
+            auto* phantomSwitcher = new juce::TextButton ();
             phantomSwitcher->setButtonText("48V");
-            if (i < 9) phantomSwitcher->setBounds(50*i, 120, 50, 50);
-            else phantomSwitcher->setBounds(50*(i - 8), 280, 50, 50);
+            if (i < 9) phantomSwitcher->setBounds(50*i + (1 - (i&1))*20, 110, 30, 20);
+            else phantomSwitcher->setBounds(50*(i - 8) + (1 - (i&1))*20, 250, 30, 20);
+            phantomSwitcher->setClickingTogglesState(true);
+            phantomSwitcher->setColour(juce::TextButton::buttonColourId, juce::Colours::grey);
+            phantomSwitcher->setColour(juce::TextButton::buttonOnColourId, juce::Colours::red);
+            phantomSwitcher->setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+            phantomSwitcher->setColour(juce::TextButton::textColourOnId, juce::Colours::white);
             addAndMakeVisible(phantomSwitcher);
             phantomSwitchers.add(phantomSwitcher);
             phantomAttachments.add(new juce::AudioProcessorValueTreeState::ButtonAttachment (audioProcessor.parameters, "PHANTOM_" + juce::String (i), *phantomSwitcher));
@@ -56,9 +64,8 @@ X18gainerAudioProcessorEditor::X18gainerAudioProcessorEditor (X18gainerAudioProc
             {
                 auto* linkButton = new juce::TextButton();
                 linkButton->setButtonText("Link");
-                if (i < 9) linkButton->setBounds(50*i, 10, 100, 20);
-                else linkButton->setBounds(50*(i - 8), 170, 100, 20);
-                addAndMakeVisible(linkButton);
+                if (i < 9) linkButton->setBounds(50*i + 30, 110, 40, 20);
+                else linkButton->setBounds(50*(i - 8) + 30, 250, 40, 20);
                 linkButton->setClickingTogglesState(true);
                 linkButton->onClick = [this, linkButton]
                 {
@@ -72,14 +79,16 @@ X18gainerAudioProcessorEditor::X18gainerAudioProcessorEditor (X18gainerAudioProc
                         linkButton->setButtonText("Link");
                     }
                 };
+                addAndMakeVisible(linkButton);
                 linkButtons.add(linkButton);
                 linkAttachments.add(new juce::AudioProcessorValueTreeState::ButtonAttachment (audioProcessor.parameters, "LINK_" + juce::String ((i>>1)+1), *linkButton));
+                fprintf(stderr, "Attached link %d\r\n", (i>>1)+1);
             }
         }
     }
 
     feedbackButton.setButtonText ("FB");
-    feedbackButton.setBounds(500, 120, 50, 50);
+    feedbackButton.setBounds(500, 95, 50, 50);
     addAndMakeVisible(feedbackButton);
     feedbackAttachment.reset(new juce::AudioProcessorValueTreeState::ButtonAttachment (audioProcessor.parameters, "FEEDBACK", feedbackButton));
 }

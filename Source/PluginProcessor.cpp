@@ -136,36 +136,53 @@ void X18gainerAudioProcessor::parameterChanged(const juce::String& paramID, floa
 {
     juce::String ind;
     juce::String id;
+    juce::String idp;
+    juce::String lid;
+    int li;
+    int ipr;
     float gain;
     bool newVal = false;
+    bool linked;
 
-    if (x18_context.ip)
+    if (isConnected)
     {
         for (int i = 1; i <= 17; ++i)
         {
+            li = (i + 1)>>1;
+            lid  = "LINK_" + juce::String (li);
+            if (i&1) ipr = i + 1;
+            else ipr = i - 1;
+            idp = "GAIN_" + juce::String (ipr);
             ind = juce::String (i);
             id = "GAIN_" + ind;
-            if (paramID == id)
+            if ((paramID == id)&&(paramsMonitorEnabled))
             {
                 fprintf(stderr, "Changed: %s \t %f\r\n", id.toRawUTF8(), newValue);
                 gain = (newValue + 12) / (i == 17 ? 32 : 72);
-                // if (i == 17) gain = (newValue + 12) / 32;
-                // else gain = (newValue + 12) / 72;
                 if (gain < 0.0) gain = 0.0;
                 if (gain > 1.0) gain = 1.0;
                 setChannelGain(i, gain);
+                //if (parameters.getRawParameterValue(lid)->load()) setChannelGain(ipr, gain);
             }
 
             if (i < 17)
             {
                 id = "PHANTOM_" + ind;
-
+                if (i&1) ipr = i + 1;
+                else ipr = i - 1;
+                idp = "PHANTOM_" + juce::String (ipr);
+                if ((paramID == id)&&(paramsMonitorEnabled))
+                {
+                    fprintf(stderr, "Changed: %s \t %d\r\n", id.toRawUTF8(), (int)newValue);
+                    linked = parameters.getRawParameterValue(lid)->load();
+                    if (!linked) setChannelPhantom(i, (bool)newValue);
+                }
             }
 
             if (i < 9)
             {
                 id = "LINK_" + ind;
-                if (paramID == id)
+                if ((paramID == id)&&(paramsMonitorEnabled))
                 {
                     fprintf(stderr, "Changed: %s \t %d\r\n", id.toRawUTF8(), (int)newValue);
                     setChannelLink(i, (bool)newValue);
@@ -205,6 +222,10 @@ void X18gainerAudioProcessor::stopThread()
 void X18gainerAudioProcessor::threadHandler(void* arg)
 {
     juce::String id;
+    juce::String idp;
+    juce::String lid;
+    int li;
+    int ipr;
     x18_context_t* x18_context = (x18_context_t*)arg;
     float tmpGainM;
     float tmpGainP;
@@ -212,6 +233,7 @@ void X18gainerAudioProcessor::threadHandler(void* arg)
     bool phCur;
     bool link;
     bool linkCur;
+    bool linked;
 
     while(threadRun)
     {
@@ -243,7 +265,11 @@ void X18gainerAudioProcessor::threadHandler(void* arg)
                         else x18_context->linksOld &=~ (1 << (i - 1));
                     }
                 }
-                if (isConnected) oldGot = true;
+                if (isConnected)
+                {
+                    oldGot = true;
+                    paramsMonitorEnabled = true;
+                }
             }
         }
         else
@@ -253,6 +279,11 @@ void X18gainerAudioProcessor::threadHandler(void* arg)
             if (threadRun) for (int i = 1; i <= 17; ++i)
             {
                 id   = "GAIN_" + juce::String (i);
+                li = (i + 1)>>1;
+                lid  = "LINK_" + juce::String (li);
+                if (i&1) ipr = i + 1;
+                else ipr = i - 1;
+                idp = "GAIN_" + juce::String (ipr);
                 getChannelGain(i, &tmpGainM);
                 tmpGainP = (parameters.getRawParameterValue(id)->load() + 12)/(i==17 ? 32 : 72);
                 //fprintf(stderr, "Got: %s %f %f\r\n", id.toRawUTF8(), tmpGainM, tmpGainP);
@@ -261,13 +292,23 @@ void X18gainerAudioProcessor::threadHandler(void* arg)
                     if (*parameters.getRawParameterValue("FEEDBACK")==true) parameters.getParameter(id)->setValueNotifyingHost(tmpGainM);
                     else
                     {
+                        paramsMonitorEnabled = false;
                         parameters.getParameter(id)->setValueNotifyingHost(tmpGainP);
                         setChannelGain(i, tmpGainP);
+                        linked = parameters.getRawParameterValue(lid)->load();
+                        if ((linked)&&(i<17))
+                        {
+                            parameters.getParameter(idp)->setValueNotifyingHost(tmpGainP);
+                            setChannelGain(ipr, tmpGainP);
+                        }
+                        paramsMonitorEnabled = true;
                     }
                 }
                 if (i<17)
                 {
                     id = "PHANTOM_" + juce::String (i);
+                    idp = "PHANTOM_" + juce::String (ipr);
+                    paramsMonitorEnabled = false;
                     getChannelPhantom(i, &ph);
                     phCur = parameters.getRawParameterValue(id)->load();
                     if ((ph != phCur)&&(threadRun == true))
@@ -275,14 +316,28 @@ void X18gainerAudioProcessor::threadHandler(void* arg)
                         if (*parameters.getRawParameterValue("FEEDBACK")==true) parameters.getParameter(id)->setValueNotifyingHost(ph);
                         else
                         {
-                            parameters.getParameter(id)->setValueNotifyingHost(phCur);
-                            setChannelPhantom(i, phCur);
+                            linked = parameters.getRawParameterValue(lid)->load();
+                            if (linked)
+                            {
+                                parameters.getParameter(id)->setValueNotifyingHost(phCur);
+                                parameters.getParameter(idp)->setValueNotifyingHost(phCur);
+                                fprintf(stderr, "%d %d\r\n", i, ipr);
+                                setChannelPhantom(i, phCur);
+                                setChannelPhantom(ipr, phCur);
+                            }
+                            else
+                            {
+                                parameters.getParameter(id)->setValueNotifyingHost(phCur);
+                                setChannelPhantom(i, phCur);
+                            }
                         }
                     }
+                    paramsMonitorEnabled = true;
                 }
                 if (i<9)
                 {
                     id = "LINK_" + juce::String (i);
+                    paramsMonitorEnabled = false;
                     getChannelLink(i, &link);
                     linkCur = parameters.getRawParameterValue(id)->load();
                     if ((link != linkCur)&&(threadRun == true))
@@ -291,9 +346,10 @@ void X18gainerAudioProcessor::threadHandler(void* arg)
                         else
                         {
                             parameters.getParameter(id)->setValueNotifyingHost(linkCur);
-                            setChannelPhantom(i, linkCur);
+                            setChannelLink(i, linkCur);
                         }
                     }
+                    paramsMonitorEnabled = true;
                 }
             }
         }
@@ -414,7 +470,7 @@ int X18gainerAudioProcessor::findMixer(uint16_t port)
     return ret;
 }
 
-void X18gainerAudioProcessor::getChannelGain(uint8_t channel, float* gain)
+void X18gainerAudioProcessor::getChannelGain(uint16_t channel, float* gain)
 {
     char addrbuf[128];
     char buffer[128];
@@ -444,7 +500,7 @@ void X18gainerAudioProcessor::getChannelGain(uint8_t channel, float* gain)
     }
 }
 
-void X18gainerAudioProcessor::setChannelGain(uint8_t channel, float val)
+void X18gainerAudioProcessor::setChannelGain(uint16_t channel, float val)
 {
     char addrbuf[128];
     char buffer[128];
@@ -461,7 +517,7 @@ void X18gainerAudioProcessor::setChannelGain(uint8_t channel, float val)
     }
 }
 
-void X18gainerAudioProcessor::getChannelPhantom(uint8_t channel, bool* phantom)
+void X18gainerAudioProcessor::getChannelPhantom(uint16_t channel, bool* phantom)
 {
     char addrbuf[128];
     char buffer[128];
@@ -480,14 +536,14 @@ void X18gainerAudioProcessor::getChannelPhantom(uint8_t channel, bool* phantom)
             if ((len > 0)&&(tosc_parseMessage(&msg, answerbuf, len) == 0))
             {
                 juce::String address = tosc_getAddress(&msg);
-                if (address.startsWith("/headamp/")&&(address.endsWith("/phantom"))) *phantom = tosc_getNextInt32(&msg);
+                if (address.startsWith("/headamp/")&&address.endsWith("/phantom")) *phantom = tosc_getNextInt32(&msg);
             }
         }
         else isConnected = false;
     }
 }
 
-void X18gainerAudioProcessor::setChannelPhantom(uint8_t channel, bool val)
+void X18gainerAudioProcessor::setChannelPhantom(uint16_t channel, bool val)
 {
     char addrbuf[128];
     char buffer[128];
@@ -504,7 +560,7 @@ void X18gainerAudioProcessor::setChannelPhantom(uint8_t channel, bool val)
     }
 }
 
-void X18gainerAudioProcessor::getChannelLink(uint8_t channel, bool* link)
+void X18gainerAudioProcessor::getChannelLink(uint16_t channel, bool* link)
 {
     char addrbuf[128];
     char buffer[128];
@@ -530,7 +586,7 @@ void X18gainerAudioProcessor::getChannelLink(uint8_t channel, bool* link)
     }
 }
 
-void X18gainerAudioProcessor::setChannelLink(uint8_t channel, bool val)
+void X18gainerAudioProcessor::setChannelLink(uint16_t channel, bool val)
 {
     char addrbuf[128];
     char buffer[128];
@@ -700,7 +756,7 @@ void X18gainerAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     float newValue;
     bool changed = false;
 
-    for (int i = 1; i <= 17; ++i)
+    for (int i = 1; i <= 17; i++)
     {
         id = "GAIN_" + juce::String (i);
         newValue = *parameters.getRawParameterValue(id);
@@ -714,19 +770,22 @@ void X18gainerAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
             setChannelGain(i, x18_context.osc_gain[i - 1]);
             changed = true;
         }
-        if (i < 17)
-        {
-            id = "PHANTOM_" + juce::String (i);
-            newValue = *parameters.getRawParameterValue(id);
-            setChannelPhantom(i, (bool)newValue);
-        }
-        if (i < 9)
-        {
-            id = "LINK_" + juce::String (i);
-            newValue = *parameters.getRawParameterValue(id);
-            setChannelLink(i, (bool)newValue);
-        }
     }
+
+    for (int i = 1; i < 17; i++)
+    {
+        id = "PHANTOM_" + juce::String (i);
+        newValue = *parameters.getRawParameterValue(id);
+        setChannelPhantom(i, (bool)newValue);
+    }
+
+    for (int i = 1; i < 9; i++)
+    {
+        id = "LINK_" + juce::String (i);
+        newValue = *parameters.getRawParameterValue(id);
+        setChannelLink(i, (bool)newValue);
+    }
+
     changeRequired = changed;
 }
 

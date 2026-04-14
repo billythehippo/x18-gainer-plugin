@@ -58,14 +58,16 @@ private:
 
     std::unique_ptr<juce::DatagramSocket> socket;
     int findMixer(uint16_t port);
-    void getChannelGain(uint8_t channel, float* gain);
-    void setChannelGain(uint8_t channel, float val);
-    void getChannelPhantom(uint8_t channel, bool* phantom);
-    void setChannelPhantom(uint8_t channel, bool val);
-    void getChannelLink(uint8_t channel, bool* link);
-    void setChannelLink(uint8_t channel, bool val);
+    void getChannelGain(uint16_t channel, float* gain);
+    void setChannelGain(uint16_t channel, float val);
+    void getChannelPhantom(uint16_t channel, bool* phantom);
+    void setChannelPhantom(uint16_t channel, bool val);
+    void getChannelLink(uint16_t channel, bool* link);
+    void setChannelLink(uint16_t channel, bool val);
 
     std::thread thread;
+    std::mutex mutex;
+    bool paramsMonitorEnabled = false;
     void startThread(void* arg);
     void stopThread();
     void threadHandler(void* arg);

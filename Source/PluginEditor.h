@@ -2,6 +2,7 @@
 
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
+#include "dial.h"
 
 class X18gainerAudioProcessorEditor  : public juce::AudioProcessorEditor
 {
@@ -18,10 +19,12 @@ private:
 
     X18gainerAudioProcessor& audioProcessor;
     
+    CustomDial customDial;
+
     juce::OwnedArray<juce::Label>  labels;
     juce::OwnedArray<juce::Slider> knobs;
-    juce::OwnedArray<juce::ToggleButton> phantomSwitchers;
-    juce::OwnedArray<juce::TextButton>linkButtons;
+    juce::OwnedArray<juce::TextButton> phantomSwitchers;
+    juce::OwnedArray<juce::TextButton> linkButtons;
     juce::ToggleButton feedbackButton;
     juce::OwnedArray<juce::AudioProcessorValueTreeState::SliderAttachment> gainAttachments;
     juce::OwnedArray<juce::AudioProcessorValueTreeState::ButtonAttachment> phantomAttachments;
