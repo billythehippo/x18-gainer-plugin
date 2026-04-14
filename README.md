@@ -20,7 +20,9 @@ Building:
 1. Open .jucer file with Projucer, add exporters you want, save project;
 2. LINUX: just open treminal in <PROJECT>/Build/LinuxMakefile and type "make":
    it will copy plugins to ~/.vst3 and ./lv2 after building.
-   MacOS: use XCode or 
+   MacOS: use XCode or xcodebuild
+3. Windows - TODO
+4. Also you can try to use cmake
 
 TODO:
 1. Test it on Windows and some linux distribs;
