@@ -2,8 +2,8 @@ This is a simple JUCE8- and tinyOSC-based plugin to control Behringer X/XR18 gai
 from your DAW and also keep them in the project file. The mixer MUST be connected to the same local network with your PC.
 In this case the plugin will find mixer automatically.
 
-When FEEDBACK is switched on - you can also control the mixer from other PCs and apps with DAW parameter sync;
-when off - it will keep gains, links and phantoms as DAW parameter when changed from other PCs and apps.
+When LEADER mode is OFF (FLWR, follower) - you can also control the mixer from other PCs and apps with DAW parameter sync;
+When LEADER mode is ON (LEADER) - it will keep gains, links and phantoms as DAW parameter when changed from other PCs and apps.
 
 Also if your DAW is closed correctly it will restore gains, phantoms and links that were before the plugin was connected to mixer.
 
