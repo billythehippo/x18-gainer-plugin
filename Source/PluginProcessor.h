@@ -50,6 +50,8 @@ public:
     void setStateInformation (const void* data, int sizeInBytes) override;
 
     x18_context_t x18_context;
+    bool isConnected = false;
+    juce::String mixerName;
 
 private:
     //==============================================================================
@@ -73,7 +75,6 @@ private:
     void threadHandler(void* arg);
 
     bool changeRequired = false;
-    bool isConnected = false;
     bool oldGot = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (X18gainerAudioProcessor)

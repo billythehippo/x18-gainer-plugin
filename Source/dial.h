@@ -47,7 +47,7 @@ public:
         }
 
         // --- 3. ТЕЛО КРУТИЛКИ (С ЧЕТКИМИ КРАЯМИ) ---
-        auto dialRadius = radius - 6.0f; // Уменьшаем, чтобы влезли насечки
+        auto dialRadius = radius - 2.0f; // Уменьшаем, чтобы влезли насечки
         auto dialBounds = juce::Rectangle<float>(centreX - dialRadius, centreY - dialRadius,
                                                  dialRadius * 2, dialRadius * 2);
 
@@ -78,7 +78,7 @@ public:
         {
             g.fillAll(label.findColour(juce::Label::backgroundColourId));
             g.setColour(label.findColour(juce::Label::textColourId));
-            g.setFont(juce::Font("Consolas", 13.0f, juce::Font::plain)); // "Прогерский" шрифт для точности
+            g.setFont(juce::FontOptions("Consolas", 13.0f, juce::Font::plain));
 
             auto textArea = getLabelBorderSize(label).subtractedFrom(label.getLocalBounds());
             g.drawText(label.getText(), textArea, juce::Justification::centred, true);
